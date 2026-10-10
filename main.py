@@ -1,6 +1,6 @@
-from fastapi import FastAPI, HTTPException
-from typing import Optional, List, Dict
-from pydantic import BaseModel
+from fastapi import FastAPI, HTTPException, Path, Query, Body
+from typing import Optional, List, Dict, Annotated
+from pydantic import BaseModel, Field
 
 app = FastAPI()
 
@@ -24,6 +24,15 @@ class PostCreate(BaseModel):
     author_id: int
 
 
+class UserCreate(BaseModel):
+    name: Annotated[
+        str, Field(..., title='имя пользователя', min_length=2, max_length=20)
+    ]
+    age: Annotated[
+        int, Field(..., title='возраст пользователя', ge=0, le=120)
+    ]
+
+
 users = [
     {'id': 1, 'name': 'Timofey', 'age': 22},
     {'id': 2, 'name': 'Ivan', 'age': 22},
@@ -44,7 +53,7 @@ async def news() -> List[Post]:
 
 
 @app.get("/news/{postid}")
-async def news(postid: int) -> Post:
+async def news(postid: Annotated[int, Path(..., title="Указывается id поста", ge=1)]) -> Post:
     for post in posts:
         if post['id'] == postid:
             return Post(**post)
@@ -52,7 +61,10 @@ async def news(postid: int) -> Post:
 
 
 @app.get("/search")
-async def search(postid: Optional[int] = None) -> Dict[str, Optional[Post]]:
+async def search(postid: Annotated[
+    Optional[int],
+    Query(title="id для поиска поста по id", ge=1),
+    ]) -> Dict[str, Optional[Post]]:
     if postid:
         for post in posts:
                 if post['id'] == postid:
@@ -62,7 +74,7 @@ async def search(postid: Optional[int] = None) -> Dict[str, Optional[Post]]:
         return {"data": None}
 
 
-@app.post("/news/newPost")
+@app.post("/news/add")
 async def create(post: PostCreate) -> Post:
     author = next((user for user in users if user['id'] == post.author_id), None)
     if not author:
@@ -75,4 +87,18 @@ async def create(post: PostCreate) -> Post:
         'author': author,
     }
     posts.append(new_post)
-    return new_post
+    return Post(**new_post)
+
+
+@app.post("/users/add")
+async def create(user_param: Annotated[
+    UserCreate,
+    Body(..., example={
+        'name': 'UserName',
+        'age': 1,
+    })
+]) -> User:
+    new_user_id = len(users) + 1
+    new_user = {'id': new_user_id, 'name': UserCreate.name, 'age': UserCreate.int},
+    users.append(new_user)
+    return User(**new_user)
